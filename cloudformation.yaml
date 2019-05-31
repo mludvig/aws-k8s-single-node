@@ -97,7 +97,7 @@ Resources:
         ToPort: 6443
         CidrIp: !Ref SourceCIDR
       Tags:
-      - Name: !Sub "kubernetes.io/cluster/${AWS::StackName}"
+      - Key: !Sub "kubernetes.io/cluster/${AWS::StackName}"
         Value: owned
 
   InstanceRole:
@@ -199,12 +199,11 @@ Resources:
           # Install Minikube
           - git clone https://github.com/mludvig/aws-minikube.git
           - pushd aws-minikube
-          - ./install-minikube.sh
+          - ./install-minikube.sh ${AWS::StackName}.${HostedZone}
       Tags:
       - Key: Name
         Value: !Ref AWS::StackName
-      Tags:
-      - Name: !Sub "kubernetes.io/cluster/${AWS::StackName}"
+      - Key: !Sub "kubernetes.io/cluster/${AWS::StackName}"
         Value: owned
 
   DnsRecord:

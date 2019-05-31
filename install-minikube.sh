@@ -1,6 +1,13 @@
 #!/bin/bash
 
-exec &> /var/log/init-aws-minikube.log
+echo "=== Installing minikube ==="
+echo "Installation log is in /var/log/install-minikube.log"
+
+LOGFILE=/var/log/install-minikube.log
+tail -f ${LOGFILE} &
+TAIL_PID=$!
+trap "kill ${TAIL_PID}" EXIT
+exec &> ${LOGFILE}
 
 set -o verbose
 set -o errexit
@@ -8,7 +15,7 @@ set -o pipefail
 
 set -o nounset
 
-export DNS_NAME=${DNS_NAME}
+export DNS_NAME=${1}    # First parameter - FQDN
 export KUBERNETES_VERSION="1.14.1"
 
 # Figure out the some more settings
@@ -123,7 +130,7 @@ kubeadm init --config /tmp/kubeadm.yaml #--ignore-preflight-errors=SystemVerific
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
 # Install calico
-kubectl apply -f /tmp/calico.yaml
+kubectl apply -f scripts/calico.yaml
 
 # Allow all apps to run on master
 kubectl taint nodes --all node-role.kubernetes.io/master-

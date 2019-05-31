@@ -151,6 +151,11 @@ Resources:
       Roles:
         - !Ref InstanceRole
 
+  InstanceEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref Instance
+
   Instance:
     Type: AWS::EC2::Instance
     Properties:
@@ -186,10 +191,15 @@ Resources:
           runcmd:
           - yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
           - yum install -y git
+          # AWS-CLI installation
           - curl -O https://bootstrap.pypa.io/get-pip.py
           - python get-pip.py
           - pip install awscli
           - aws configure set default.region ${AWS::Region}
+          # Install Minikube
+          - git clone https://github.com/mludvig/aws-minikube.git
+          - pushd aws-minikube
+          - ./install-minikube.sh
       Tags:
       - Key: Name
         Value: !Ref AWS::StackName
@@ -197,14 +207,14 @@ Resources:
       - Name: !Sub "kubernetes.io/cluster/${AWS::StackName}"
         Value: owned
 
-  DnsRecordInstance:
+  DnsRecord:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneName: !Ref HostedZone
-      Name: !Sub "${AWS::StackName}-instance.${HostedZone}"
+      Name: !Sub "${AWS::StackName}.${HostedZone}"
       ResourceRecords:
-        - !GetAtt Instance.PublicIp
-      TTL: 60
+        - !Ref InstanceEip
+      TTL: 900
       Type: A
 
 

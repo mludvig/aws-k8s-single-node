@@ -32,7 +32,6 @@ Parameters:
   KeyName:
     Description: Name of an existing EC2 KeyPair in the region, to enable SSH access to the instance.
     Type: AWS::EC2::KeyPair::KeyName
-    Default: ADMludvim
 
   InstanceType:
     Description: Instance type
@@ -41,40 +40,35 @@ Parameters:
 
   HostedZone:
     Type: String
-    Description: Route53 zone for the DNS records. Include trailing dot.
-    Default: airnz-learning-sandpit.aws.nz.
+    Description: Route53 zone for the DNS records.
+    AllowedPattern: "^[a-z0-9][a-z0-9-\\.]+[a-z0-9]$"
+    ConstraintDescription: Domain name only, no trailing dot.
 
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: VpcId of your existing Virtual Private Cloud (VPC)
-    Default: vpc-069af2d2fd56da200
 
   SubnetId1:
     Type: AWS::EC2::Subnet::Id
     Description: SubnetId in the above VPC
-    Default: subnet-088e0d138931eadf5
 
   SubnetId2:
     Type: AWS::EC2::Subnet::Id
     Description: SubnetId in the above VPC
-    Default: subnet-0b9fb21d9d1fbdc63
 
   SubnetId3:
     Type: AWS::EC2::Subnet::Id
     Description: SubnetId in the above VPC
-    Default: subnet-0e0d150ddcee555a8
 
   SourceCIDR:
     Description: IP/Mask which will be allowed for HTTP and SSH access.
     Type: String
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(/([0-9]|[1-2][0-9]|3[0-2]))$
     ConstraintDescription: Secured ip must be valid IPv4 CIDR address for example 192.168.0.1/32
-    Default: 175.45.102.161/32
 
   BucketName:
     Description: Deployment bucket
     Type: String
-    Default: airnz-shared-test
 
 Mappings:
   AWSRegionAMI:
@@ -185,7 +179,7 @@ Resources:
         Fn::Base64: !Sub |-
           #cloud-config
           timezone: Pacific/Auckland
-          hostname: ${AWS::StackName}.${HostedZone}
+          hostname: ${AWS::StackName}.${HostedZone}.
           preserve_hostname: false
           ssh_pwauth: True
           runcmd:
@@ -209,8 +203,8 @@ Resources:
   DnsRecord:
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneName: !Ref HostedZone
-      Name: !Sub "${AWS::StackName}.${HostedZone}"
+      HostedZoneName: !Sub "${HostedZone}."
+      Name: !Sub "${AWS::StackName}.${HostedZone}."
       ResourceRecords:
         - !Ref InstanceEip
       TTL: 900

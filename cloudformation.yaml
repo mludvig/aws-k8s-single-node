@@ -1,0 +1,210 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Minikube Stack
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Bucket Name
+        Parameters:
+          - BucketName
+
+      - Label:
+          default: Instance configuration
+        Parameters:
+          - InstanceType
+          - KeyName
+
+      - Label:
+          default: Network configuration
+        Parameters:
+          - HostedZone
+          - VpcId
+          - SubnetId1
+          - SubnetId2
+          - SubnetId3
+
+      - Label:
+          default: Security configuration
+        Parameters:
+          - SourceCIDR
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair in the region, to enable SSH access to the instance.
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: ADMludvim
+
+  InstanceType:
+    Description: Instance type
+    Type: String
+    Default: m4.large
+
+  HostedZone:
+    Type: String
+    Description: Route53 zone for the DNS records. Include trailing dot.
+    Default: airnz-learning-sandpit.aws.nz.
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VpcId of your existing Virtual Private Cloud (VPC)
+    Default: vpc-069af2d2fd56da200
+
+  SubnetId1:
+    Type: AWS::EC2::Subnet::Id
+    Description: SubnetId in the above VPC
+    Default: subnet-088e0d138931eadf5
+
+  SubnetId2:
+    Type: AWS::EC2::Subnet::Id
+    Description: SubnetId in the above VPC
+    Default: subnet-0b9fb21d9d1fbdc63
+
+  SubnetId3:
+    Type: AWS::EC2::Subnet::Id
+    Description: SubnetId in the above VPC
+    Default: subnet-0e0d150ddcee555a8
+
+  SourceCIDR:
+    Description: IP/Mask which will be allowed for HTTP and SSH access.
+    Type: String
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Secured ip must be valid IPv4 CIDR address for example 192.168.0.1/32
+    Default: 175.45.102.161/32
+
+  BucketName:
+    Description: Deployment bucket
+    Type: String
+    Default: airnz-shared-test
+
+Mappings:
+  AWSRegionAMI:
+    ap-southeast-2:
+      '64': ami-08bd00d7713a39e7d       # CentOS Linux 7 x86_64 HVM EBS ENA
+
+Resources:
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "${AWS::StackName} instance security group"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: !Ref SourceCIDR
+      - IpProtocol: tcp
+        FromPort: 6443
+        ToPort: 6443
+        CidrIp: !Ref SourceCIDR
+      Tags:
+      - Name: !Sub "kubernetes.io/cluster/${AWS::StackName}"
+        Value: owned
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      Policies:
+      - PolicyName: MinikubeInstancePolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action:
+              - s3:*
+              Resource:
+              - !Sub "arn:aws:s3:::${BucketName}"
+              - !Sub "arn:aws:s3:::${BucketName}/*"
+            - Effect: Allow
+              Action:
+              - ec2:*
+              - elasticloadbalancing:*
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:GetRepositoryPolicy
+              - ecr:DescribeRepositories
+              - ecr:ListImages
+              - ecr:BatchGetImage
+              - route53:GetHostedZone
+              - route53:ListHostedZones
+              - route53:ListHostedZonesByName
+              - route53:ChangeResourceRecordSets
+              - route53:ListResourceRecordSets
+              - route53:GetChange
+              Resource:
+              - "*"
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref InstanceRole
+
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap
+        - AWSRegionAMI
+        - !Ref AWS::Region
+        - 64
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      Monitoring: true
+      DisableApiTermination: false
+      IamInstanceProfile: !Ref InstanceProfile
+      NetworkInterfaces:
+      - GroupSet:
+        - !GetAtt InstanceSecurityGroup.GroupId
+        AssociatePublicIpAddress: true
+        DeviceIndex: 0
+        DeleteOnTermination: true
+        SubnetId: !Ref SubnetId1
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "gp2"
+          DeleteOnTermination: "true"
+          VolumeSize: "50"
+      UserData:
+        Fn::Base64: !Sub |-
+          #cloud-config
+          timezone: Pacific/Auckland
+          hostname: ${AWS::StackName}.${HostedZone}
+          preserve_hostname: false
+          ssh_pwauth: True
+          runcmd:
+          - yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+          - yum install -y git
+          - curl -O https://bootstrap.pypa.io/get-pip.py
+          - python get-pip.py
+          - pip install awscli
+          - aws configure set default.region ${AWS::Region}
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+      Tags:
+      - Name: !Sub "kubernetes.io/cluster/${AWS::StackName}"
+        Value: owned
+
+  DnsRecordInstance:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Ref HostedZone
+      Name: !Sub "${AWS::StackName}-instance.${HostedZone}"
+      ResourceRecords:
+        - !GetAtt Instance.PublicIp
+      TTL: 60
+      Type: A
+
+

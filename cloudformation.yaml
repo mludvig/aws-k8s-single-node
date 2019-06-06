@@ -200,7 +200,7 @@ Outputs:
     Value: !Ref DnsRecord
 
   PrivateIp:
-    Value: !Ref Instance.PrivateIp
+    Value: !GetAtt Instance.PrivateIp
 
   PublicIp:
     Value: !Ref InstanceEip

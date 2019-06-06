@@ -1,13 +1,8 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: AWS Minikube Stack
+Description: AWS Single-node Kubernetes Stack
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-      - Label:
-          default: Bucket Name
-        Parameters:
-          - BucketName
-
       - Label:
           default: Instance configuration
         Parameters:
@@ -26,7 +21,7 @@ Metadata:
       - Label:
           default: Security configuration
         Parameters:
-          - SourceCIDR
+          - AdminCIDR
 
 Parameters:
   KeyName:
@@ -60,15 +55,11 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
     Description: SubnetId in the above VPC
 
-  SourceCIDR:
+  AdminCIDR:
     Description: IP/Mask which will be allowed for HTTP and SSH access.
     Type: String
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(/([0-9]|[1-2][0-9]|3[0-2]))$
     ConstraintDescription: Secured ip must be valid IPv4 CIDR address for example 192.168.0.1/32
-
-  BucketName:
-    Description: Deployment bucket
-    Type: String
 
 Mappings:
   AWSRegionAMI:
@@ -85,11 +76,11 @@ Resources:
       - IpProtocol: tcp
         FromPort: 22
         ToPort: 22
-        CidrIp: !Ref SourceCIDR
+        CidrIp: !Ref AdminCIDR
       - IpProtocol: tcp
         FromPort: 6443
         ToPort: 6443
-        CidrIp: !Ref SourceCIDR
+        CidrIp: !Ref AdminCIDR
       Tags:
       - Key: !Sub "kubernetes.io/cluster/${AWS::StackName}"
         Value: owned
@@ -108,16 +99,10 @@ Resources:
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
       Policies:
-      - PolicyName: MinikubeInstancePolicy
+      - PolicyName: InstancePolicy
         PolicyDocument:
           Version: 2012-10-17
           Statement:
-            - Effect: Allow
-              Action:
-              - s3:*
-              Resource:
-              - !Sub "arn:aws:s3:::${BucketName}"
-              - !Sub "arn:aws:s3:::${BucketName}/*"
             - Effect: Allow
               Action:
               - ec2:*
@@ -190,10 +175,10 @@ Resources:
           - python get-pip.py
           - pip install awscli
           - aws configure set default.region ${AWS::Region}
-          # Install Minikube
-          - git clone https://github.com/mludvig/aws-minikube.git
-          - pushd aws-minikube
-          - ./install-minikube.sh ${AWS::StackName}.${HostedZone}
+          # Install Kubernetes
+          - git clone https://github.com/mludvig/aws-k8s-single-node.git
+          - pushd aws-k8s-single-node
+          - ./install-kubernetes.sh ${AWS::StackName}.${HostedZone}
       Tags:
       - Key: Name
         Value: !Ref AWS::StackName
@@ -210,4 +195,12 @@ Resources:
       TTL: 900
       Type: A
 
+Outputs:
+  DnsRecord:
+    Value: !Ref DnsRecord
 
+  PrivateIp:
+    Value: !Ref Instance.PrivateIp
+
+  PublicIp:
+    Value: !Ref InstanceEip

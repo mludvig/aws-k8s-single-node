@@ -1,9 +1,12 @@
 #!/bin/bash
 
-echo "=== Installing minikube ==="
-echo "Installation log is in /var/log/install-minikube.log"
+export KUBERNETES_VERSION="1.14.2"
 
-LOGFILE=/var/log/install-minikube.log
+echo "=== Installing Kubernetes ${KUBERNETES_VERSION} ==="
+
+LOGFILE=/var/log/install-kubernetes.log
+echo "Installation log is in ${LOGFILE}"
+
 tail -f ${LOGFILE} &
 TAIL_PID=$!
 trap "kill ${TAIL_PID}" EXIT
@@ -16,7 +19,6 @@ set -o pipefail
 set -o nounset
 
 export DNS_NAME=${1}    # First parameter - FQDN
-export KUBERNETES_VERSION="1.14.1"
 
 # Figure out the some more settings
 export IP_ADDRESS=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)

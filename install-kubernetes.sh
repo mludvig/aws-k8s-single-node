@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export KUBERNETES_VERSION="1.14.2"
+export KUBERNETES_VERSION="1.14.3"
 
 echo "=== Installing Kubernetes ${KUBERNETES_VERSION} ==="
 
@@ -53,12 +53,10 @@ setenforce 0
 sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/sysconfig/selinux
 sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
 
-yum install -y kubelet-$KUBERNETES_VERSION kubeadm-$KUBERNETES_VERSION kubernetes-cni
+yum install -y kubelet-${KUBERNETES_VERSION} kubeadm-${KUBERNETES_VERSION} kubectl-${KUBERNETES_VERSION} kubernetes-cni
 
-# Fix kubelet configuration
-sed -i 's/--cgroup-driver=systemd/--cgroup-driver=cgroupfs/g' /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
-sed -i '/Environment="KUBELET_CGROUP_ARGS/i Environment="KUBELET_CLOUD_ARGS=--cloud-provider=aws"' /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
-sed -i 's/$KUBELET_CGROUP_ARGS/$KUBELET_CLOUD_ARGS $KUBELET_CGROUP_ARGS/g' /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+# Add --cloud-provider=aws to kubelet args
+sed -i 's/^KUBELET_EXTRA_ARGS=\(.*\)/KUBELET_EXTRA_ARGS="--cloud-provider=aws \1"/' /etc/sysconfig/kubelet
 
 # Start services
 systemctl enable docker
@@ -66,7 +64,7 @@ systemctl start docker
 systemctl enable kubelet
 systemctl start kubelet
 
-# Set settings needed by Docker
+# Settings needed by Docker
 sysctl net.bridge.bridge-nf-call-iptables=1
 sysctl net.bridge.bridge-nf-call-ip6tables=1
 
@@ -124,7 +122,7 @@ networking:
 EOF
 
 kubeadm reset --force
-kubeadm init --config /tmp/kubeadm.yaml #--ignore-preflight-errors=SystemVerification
+kubeadm init --config /tmp/kubeadm.yaml
 
 # Use the local kubectl config for further kubectl operations
 export KUBECONFIG=/etc/kubernetes/admin.conf
@@ -141,19 +139,14 @@ kubectl label nodes --all node-role.kubernetes.io/master-
 # Allow the user to administer the cluster
 kubectl create clusterrolebinding admin-cluster-binding --clusterrole=cluster-admin --user=admin
 
-# Prepare the kubectl config file for download to client (IP address)
-export KUBECONFIG_OUTPUT=/home/centos/kubeconfig_ip
-kubeadm alpha kubeconfig user \
-  --client-name admin \
-  --apiserver-advertise-address $IP_ADDRESS \
-  > $KUBECONFIG_OUTPUT
-chown centos:centos $KUBECONFIG_OUTPUT
-chmod 0600 $KUBECONFIG_OUTPUT
+# Copy kubeconfig to 'centos' user home
+mkdir /home/centos/.kube
+cp /etc/kubernetes/admin.conf /home/centos/.kube/config
+chown centos:centos /home/centos/.kube/config
+chmod 0600 /home/centos/.kube/config
 
-cp /home/centos/kubeconfig_ip /home/centos/kubeconfig
-sed -i "s/server: https:\/\/$IP_ADDRESS:6443/server: https:\/\/$DNS_NAME:6443/g" /home/centos/kubeconfig
-chown centos:centos /home/centos/kubeconfig
-chmod 0600 /home/centos/kubeconfig
+# Set $KUBECONFIG for root
+echo "export KUBECONFIG=${KUBECONFIG}" >> /root/.bashrc
 
 # Load addons
 for ADDON in addons/*.yaml
@@ -162,4 +155,3 @@ do
   kubectl apply -f /tmp/addon.yaml
   rm /tmp/addon.yaml
 done
-

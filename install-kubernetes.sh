@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export KUBERNETES_VERSION="1.14.3"
+export KUBERNETES_VERSION="1.15.0"
 
 echo "=== Installing Kubernetes ${KUBERNETES_VERSION} ==="
 

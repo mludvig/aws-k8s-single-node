@@ -42,15 +42,19 @@ sudo cat <<EOF > /etc/yum.repos.d/kubernetes.repo
 name=Kubernetes
 baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
 enabled=1
+# Repo GPG check doesn't work on Amazon Linux 2
+# https://github.com/kubernetes/kubernetes/issues/60134
 gpgcheck=1
-repo_gpgcheck=1
+repo_gpgcheck=0
 gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg
        https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 EOF
+# Import RPM keys for package verification (it doesn't fix the repo_gpgcheck issue above)
+rpm --import https://packages.cloud.google.com/yum/doc/yum-key.gpg \
+             https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 
-# Disable SELinux
-setenforce 0
-sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/sysconfig/selinux
+# Disable SELinux - not enabled on Amazon Linux anyway
+setenforce 0 || true
 sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
 
 yum install -y kubelet-${KUBERNETES_VERSION} kubeadm-${KUBERNETES_VERSION} kubectl-${KUBERNETES_VERSION} kubernetes-cni
@@ -139,19 +143,19 @@ kubectl label nodes --all node-role.kubernetes.io/master-
 # Allow the user to administer the cluster
 kubectl create clusterrolebinding admin-cluster-binding --clusterrole=cluster-admin --user=admin
 
-# Copy kubeconfig to 'centos' user home
-mkdir /home/centos/.kube
-cp /etc/kubernetes/admin.conf /home/centos/.kube/config
-chown centos:centos /home/centos/.kube/config
-chmod 0600 /home/centos/.kube/config
-
 # Set $KUBECONFIG for root
 echo "export KUBECONFIG=${KUBECONFIG}" >> /root/.bashrc
+
+# Copy kubeconfig to 'ec2-user' home
+mkdir /home/ec2-user/.kube
+cp /etc/kubernetes/admin.conf /home/ec2-user/.kube/config
+chown ec2-user:ec2-user /home/ec2-user/.kube/config
+chmod 0600 /home/ec2-user/.kube/config
 
 # Load addons
 for ADDON in addons/*.yaml
 do
   cat $ADDON | envsubst > /tmp/addon.yaml
   kubectl apply -f /tmp/addon.yaml
-  rm /tmp/addon.yaml
+  rm -f /tmp/addon.yaml
 done

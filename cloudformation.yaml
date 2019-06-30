@@ -33,6 +33,11 @@ Parameters:
     Type: String
     Default: m4.large
 
+  ImageId:
+    Description: Do not change - points to the latest Amazon Linux 2 AMI
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
   HostedZone:
     Type: String
     Description: Route53 zone for the DNS records.
@@ -60,11 +65,6 @@ Parameters:
     Type: String
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(/([0-9]|[1-2][0-9]|3[0-2]))$
     ConstraintDescription: Secured ip must be valid IPv4 CIDR address for example 192.168.0.1/32
-
-Mappings:
-  AWSRegionAMI:
-    ap-southeast-2:
-      '64': ami-08bd00d7713a39e7d       # CentOS Linux 7 x86_64 HVM EBS ENA
 
 Resources:
   InstanceSecurityGroup:
@@ -138,10 +138,7 @@ Resources:
   Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap
-        - AWSRegionAMI
-        - !Ref AWS::Region
-        - 64
+      ImageId: !Ref ImageId
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
       Monitoring: true
